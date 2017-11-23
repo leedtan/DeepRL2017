@@ -180,7 +180,7 @@ def dagger(expert_policy_file, envname, render, max_timesteps, num_rollouts, num
 import argparse
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--envname',default='Hopper-v1', type=str)
+parser.add_argument('--envname',default='Humanoid-v1', type=str)
 parser.add_argument('--render', type=bool,default=True)
 parser.add_argument("--max_timesteps", default=1000,type=int)
 parser.add_argument("--num_dagger", default=200,type=int)

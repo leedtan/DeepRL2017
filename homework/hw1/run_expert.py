@@ -51,7 +51,7 @@ def run_expert(envname = 'Humanoid-v1', render=False, max_timesteps=1000, num_ro
                 if steps % 100 == 0: print("%i/%i"%(steps, max_steps))
                 if steps >= max_steps:
                     break
-            returns.append(totalr)
+            returns+= [totalr] * (len(actions) - len(returns))
 
         print('returns', returns)
         print('mean return', np.mean(returns))
@@ -60,7 +60,7 @@ def run_expert(envname = 'Humanoid-v1', render=False, max_timesteps=1000, num_ro
         expert_data = {'observations': np.array(observations),
                        'actions': np.array(actions)}
         with open('datasets/objs_expert_' + envname + '.pkl', 'wb') as f:
-            pickle.dump([returns, expert_data], f)
+            pickle.dump([np.array(returns), expert_data], f)
 
 if __name__ == '__main__':
     run_expert()

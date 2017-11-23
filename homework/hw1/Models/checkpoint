@@ -1,2 +1,2 @@
-model_checkpoint_path: "ImitationHopper-v1"
-all_model_checkpoint_paths: "ImitationHopper-v1"
+model_checkpoint_path: "ImitationHumanoid-v1"
+all_model_checkpoint_paths: "ImitationHumanoid-v1"

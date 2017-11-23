@@ -182,7 +182,9 @@ class Model():
         for i in range(self.last_epoch + 1, self.last_epoch + epochs + 1):
             
             #Exit once optimal generalization reached
-            if failed_count > 2:
+            if failed_count > 1:
+                self.Saver.save(self.session, self.ModelPath)
+                return
                 self.Saver.restore(self.session, self.ModelPath)
                 return
             
@@ -211,7 +213,7 @@ class Model():
                                     }))
                 obs_std = obs_batch.std(0)
                 adv = adv/np.linalg.norm(adv)
-                obs_batch = obs_batch + obs_std * adv * .1
+                obs_batch = obs_batch + obs_std * adv * .005 * adv.shape[1]
                 _, loss, yhat, reg, grad_norm = (self.session.run(
                         [self.optimizer, self.l2_loss, self.yhat, self.reg_loss,self.grad_norm],
                                    {self.obs: obs_batch, 
@@ -253,15 +255,15 @@ class Model():
                     if val_loss < best_val_loss:
                         best_val_loss = val_loss
                         self.best_epoch = i
-                        self.Saver.save(self.session, self.ModelPath)
+                        #self.Saver.save(self.session, self.ModelPath)
                         failed_count = 0
                     else:
                         failed_count += 1
             
             
-            
             if verb > 0:
                 print ("avg loss validation:", val_loss, 'failed count:', failed_count)
+        self.Saver.save(self.session, self.ModelPath)
         #self.best_epoch = i
         #self.Saver.save(self.session, self.ModelPath)
     

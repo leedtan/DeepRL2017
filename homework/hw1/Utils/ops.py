@@ -72,7 +72,7 @@ def normalize_outgoing_likes(rating_events, unique_users, user_map):
     return rating_events
 
 
-def split_all_train_val(obs, act, split=.01):
+def split_all_train_val(obs, act, returns = None, split=.01):
 
     shuffle  = np.random.permutation(obs.shape[0])
     partition = int(np.floor(obs.shape[0] * (1-split)))
@@ -85,12 +85,24 @@ def split_all_train_val(obs, act, split=.01):
     
     act_trn = act[train_idx,:]
     act_val = act[val_idx,:]
-
-    expert_train = {'observations':obs_trn,
-                    'actions':act_trn}
-
-    expert_val = {'observations':obs_val,
-                    'actions':act_val}
+    
+    if returns is not None:
+        ret_trn = returns[train_idx]
+        ret_val = returns[val_idx]
+    
+        expert_train = {'observations':obs_trn,
+                        'actions':act_trn,
+                        'returns':ret_trn}
+    
+        expert_val = {'observations':obs_val,
+                        'actions':act_val,
+                        'returns':ret_val}
+    else:
+        expert_train = {'observations':obs_trn,
+                        'actions':act_trn}
+    
+        expert_val = {'observations':obs_val,
+                        'actions':act_val}
 
     return expert_train, expert_val
 

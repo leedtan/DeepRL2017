@@ -50,6 +50,7 @@ def dagger(expert_policy_file, envname, render, max_timesteps, num_rollouts, num
     except:
         try:
             returns, expert_data = pickle.load( open('datasets/objs_expert_' + args.envname + '.pkl', "rb" ) )
+            returns = np.vstack((returns, np.ones_like(returns) * np.inf)).T    
             print('using old expert only data')
         except:
             print('making new expert data')
@@ -58,8 +59,11 @@ def dagger(expert_policy_file, envname, render, max_timesteps, num_rollouts, num
                         max_timesteps = 1000, 
                         num_rollouts = 100)
             returns, expert_data = pickle.load( open('datasets/objs_expert_' + args.envname + '.pkl', "rb" ) )
+            returns = np.vstack((returns, np.ones_like(returns) * np.inf)).T     
     all_returns = returns
     obs, act = expert_data['observations'], expert_data['actions']
+    print('obs Shape:', obs.shape)
+    print('act Shape:', act.shape)
     
     expert_train, expert_val = ops.split_all_train_val(obs, act, all_returns)
     
@@ -70,7 +74,7 @@ def dagger(expert_policy_file, envname, render, max_timesteps, num_rollouts, num
     model.ModelPath = model.ModelPath
     model.restore()
     model.last_epoch=3
-    model.train(expert_train, expert_val, verb = 1, epochs = 1000)
+    model.train(expert_train, expert_val, verb = 1, epochs = 1)
 
     print('loading and building expert policy')
     policy_fn = load_policy.load_policy(expert_policy_file)
@@ -149,9 +153,15 @@ def dagger(expert_policy_file, envname, render, max_timesteps, num_rollouts, num
                         ),
                     total_i
                     )
-                returns.append(totalr)
-                all_returns = np.concatenate([all_returns, np.array([totalr] * num_runs)])
-            print('returns', returns)
+                returns = [totalr] * (len(observations) - all_returns.shape[0])
+                if all_returns.shape[0] < 1e6:
+                    all_returns = np.concatenate(
+                            [all_returns, np.vstack((returns, np.zeros_like(returns))).T] )
+                else:
+                    all_returns = np.concatenate(
+                            [all_returns, np.vstack((returns, np.ones_like(returns))).T] )
+            all_returns = all_returns / .99
+            print('observations so far:', all_returns.shape[0])
             print('mean return', np.mean(returns))
             print('std of return', np.std(returns))
     
@@ -166,7 +176,7 @@ def dagger(expert_policy_file, envname, render, max_timesteps, num_rollouts, num
             print('DAGGER NUMBER:', dag, 'of:', num_dagger)
             
             
-            model.train(expert_train, expert_val, verb = 1, epochs = 1000)
+            model.train(expert_train, expert_val, verb = 1, epochs = 1)
             if (dag + 1) % 2 == 0:
                 model.draw_learning_curve(show_graphs = False)
                 with open('datasets/objs_dagger_' + args.envname + '.pkl', 'wb') as f:
@@ -186,8 +196,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--envname',default='Humanoid-v1', type=str)
 parser.add_argument('--render', type=bool,default=True)
 parser.add_argument("--max_timesteps", default=1000,type=int)
-parser.add_argument("--num_dagger", default=200,type=int)
-parser.add_argument('--num_rollouts', type=int, default=5,
+parser.add_argument("--num_dagger", default=20000,type=int)
+parser.add_argument('--num_rollouts', type=int, default=10,
                     help='Number of expert roll outs')
 args = parser.parse_args()
 expert_policy_file = 'experts/' + args.envname + '.pkl'

@@ -72,7 +72,7 @@ def normalize_outgoing_likes(rating_events, unique_users, user_map):
     return rating_events
 
 
-def split_all_train_val(obs, act, returns = None, split=.01):
+def split_all_train_val(obs, act, returns = None, split=.3):
 
     shuffle  = np.random.permutation(obs.shape[0])
     partition = int(np.floor(obs.shape[0] * (1-split)))
@@ -87,8 +87,8 @@ def split_all_train_val(obs, act, returns = None, split=.01):
     act_val = act[val_idx,:]
     
     if returns is not None:
-        ret_trn = returns[train_idx]
-        ret_val = returns[val_idx]
+        ret_trn = returns[train_idx,:]
+        ret_val = returns[val_idx,:]
     
         expert_train = {'observations':obs_trn,
                         'actions':act_trn,
@@ -129,6 +129,13 @@ def split_trn_tst(x, y, frac_trn = .8):
     x_tst = x[tst]
     y_tst = y[tst]
     return x_trn, y_trn, x_tst, y_tst
+def split_df_trn_tst(data, frac_trn = .8):
+    num_total = data.shape[0]
+    trn = np.random.choice(num_total, int(round(num_total*frac_trn)), replace=False)
+    tst = [i for i in range(num_total) if i not in trn]
+    data_trn = data[trn]
+    data_tst = data[tst]
+    return data_trn, data_tst
 
 
 class batch_norm(object):

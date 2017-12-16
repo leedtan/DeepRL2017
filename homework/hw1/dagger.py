@@ -56,7 +56,7 @@ def dagger(expert_policy_file, envname, render, max_timesteps, num_rollouts, num
             import run_expert
             run_expert.run_expert(envname = args.envname, render=0, 
                         max_timesteps = 1000, 
-                        num_rollouts = 10)
+                        num_rollouts = 2)
             returns, expert_data = pickle.load( open('datasets/objs_expert_' + args.envname + '.pkl', "rb" ) )
     obs, act = expert_data['observations'], expert_data['actions']
     
@@ -148,7 +148,7 @@ def dagger(expert_policy_file, envname, render, max_timesteps, num_rollouts, num
                     )
                 returns.append(totalr)
     
-            print('returns', returns)
+            #print('returns', returns)
             print('mean return', np.mean(returns))
             print('std of return', np.std(returns))
     
@@ -164,7 +164,7 @@ def dagger(expert_policy_file, envname, render, max_timesteps, num_rollouts, num
             
             
             model.train(expert_train, expert_val, verb = 1, epochs = 1000)
-            if (dag + 1) % 2 == 0:
+            if (dag + 1) % 5 == 0:
                 model.draw_learning_curve(show_graphs = False)
                 with open('datasets/objs_dagger_' + args.envname + '.pkl', 'wb') as f:
                     pickle.dump([returns, expert_data], f)

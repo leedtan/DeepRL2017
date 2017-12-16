@@ -53,7 +53,7 @@ def run_expert(envname = 'Humanoid-v1', render=False, max_timesteps=1000, num_ro
                     break
             returns+= [totalr] * (len(actions) - len(returns))
 
-        print('returns', returns)
+        #print('returns', returns)
         print('mean return', np.mean(returns))
         print('std of return', np.std(returns))
 

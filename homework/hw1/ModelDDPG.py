@@ -26,6 +26,7 @@ class Q():
     def __init__(self, size_input, act_obs_vec):
         self.act_obs = act_obs_vec#tf.placeholder(tf.float32, shape=(None, size_input))
         self.true_reward = tf.placeholder(tf.float32, shape=(None))
+        self.reward_enabled = tf.placeholder(tf.float32, shape=(None))
         hidden = self.act_obs
         prev_layer_size = size_input
         for idx in range(3):
@@ -35,12 +36,12 @@ class Q():
         w = tf.Variable(tf.random_uniform([prev_layer_size, 1],minval = -1., maxval = 1.), name='q_output_w') * 1e-3
         b = tf.Variable(tf.random_uniform([1],minval = -1., maxval = 1.), name='q_output_bias') * 1e-3
         self.yhat = tf.nn.softplus(tf.reshape(tf.matmul(hidden, w) + b, [-1]))
-        self.l2_loss = tf.reduce_mean(tf.square(self.yhat - self.true_reward))
+        self.l2_loss = tf.reduce_mean(tf.square(self.yhat - self.true_reward) * self.reward_enabled)
         self.optimizer = tf.train.AdamOptimizer(learning_rate=1e-3).minimize(self.l2_loss)
 
 class Model():
     
-    def __init__(self,  size_obs, size_act, net_struct = [200, 200, 200, 200, 200], name='dbg'):
+    def __init__(self,  size_obs, size_act, net_struct = [100, 100, 100, 100], name='dbg'):
         self.tensorboardpath = 'tensorboards/' + name
         self.train_writer = tf.summary.FileWriter(self.tensorboardpath)
         self.ModelPath = 'Models/Imitation' + name
@@ -53,20 +54,15 @@ class Model():
         self.ret = tf.placeholder(tf.float32, shape=(None))
         act_trn = self.obs
         act_tst = self.obs
-        
-        act_trn, act_tst = ops.cascade_bn_relu_trn_tst(
-                act_trn, size_obs, size_inpt, name='layer' + '-1', input_tst = act_tst)
-        size_inpt = size_inpt + size_obs
-        prev_layer_size = size_inpt
+        prev_layer_size = size_obs
         #Hidden layers
         self.l2_reg = 1e-8
         self.Q_lr = tf.placeholder(tf.float32, shape=(None))
         self.lr = tf.placeholder(tf.float32, shape=(None))
         if 1:
             for idx, l in enumerate(net_struct):
-                l = size_inpt
                 act_trn, act_tst = ops.cascade_bn_relu_trn_tst(
-                        act_trn, prev_layer_size, size_inpt, name='layer' + str(idx), input_tst = act_tst)
+                        act_trn, prev_layer_size, l, name='layer' + str(idx), input_tst = act_tst)
                 prev_layer_size += l
                 
             w = tf.Variable(tf.random_uniform([prev_layer_size, size_act],minval = -1., maxval = 1.), name='net_output_w') * 1e-3
@@ -80,7 +76,7 @@ class Model():
         self.yhat_tst = tf.reshape(tf.matmul(act_tst, w) + b, [-1, size_act])
         
         self.obs_act = tf.concat((self.obs, self.yhat),1)
-        self.Q = Q(size_obs + size_act, self.obs_act)
+        self.Q = Q(size_obs + size_act, tf.stop_gradient(self.obs_act))
                 
         self.act = tf.placeholder(tf.float32, shape=(None))
         
@@ -98,7 +94,7 @@ class Model():
         
         optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
         gvs = optimizer.compute_gradients(self.l2_loss + self.reg_loss - self.Q.yhat * self.Q_lr + self.Q.l2_loss)
-        self.grad_norm = tf.reduce_mean([tf.reduce_mean(g) for g in gvs])
+        self.grad_norm = tf.reduce_mean([tf.reduce_mean(grad) for grad, var in gvs if grad is not None])
         clip_norm = 100
         clip_single = 1
         capped_gvs = [(tf.clip_by_value(grad, -1*clip_single,clip_single), var) for grad, var in gvs if grad is not None]
@@ -132,6 +128,9 @@ class Model():
         val_obs = expert_val['observations']
         val_act = expert_val['actions']
         val_ret = expert_val['returns']
+        trn_ret_enabled = trn_ret[:,1]
+        trn_ret_enabled = (trn_ret_enabled > 0.5).astype(float)
+        trn_ret = trn_ret[:,0]
         
         start_time = time.time()
         self.batch_size = batch_size
@@ -161,17 +160,19 @@ class Model():
             print('learning rate:', 1e-1/np.sqrt(i+1))
             pre_adv = 0
             post_adv = 0
-            if i > 10:
+            if i > 0:
                 self.cur_Q_lr = .1
             for b_idx in range(int(round(self.num_batches))):
                 batch_vals = shuffled[self.batch_size * b_idx:self.batch_size * (b_idx + 1)]
                 obs_batch  = trn_obs[batch_vals]
                 act_batch  = trn_act[batch_vals]
                 ret_batch  = trn_ret[batch_vals]
+                ret_enabled_batch  = trn_ret_enabled[batch_vals]
                 if b_idx == self.num_batches - 1:
                     obs_batch  = trn_obs[shuffled[self.batch_size * b_idx:],:]
                     act_batch  = trn_act[shuffled[self.batch_size * b_idx:],:]
                     ret_batch  = trn_ret[shuffled[self.batch_size * b_idx:]]
+                    ret_enabled_batch  = trn_ret_enabled[shuffled[self.batch_size * b_idx:]]
                     
                 
                 adv, pre_adv_loss = (self.session.run(
@@ -179,7 +180,8 @@ class Model():
                                    {self.obs: obs_batch, 
                                     self.act: act_batch,
                                     self.Q_lr: self.cur_Q_lr,
-                                    self.Q.true_reward : ret_batch/trn_ret.max()
+                                    self.Q.true_reward : ret_batch/trn_ret.max(),
+                                    self.Q.reward_enabled : ret_enabled_batch
                                     }))
                 obs_std = obs_batch.std(0)
                 adv = adv/np.linalg.norm(adv)
@@ -190,7 +192,8 @@ class Model():
                                     self.act: act_batch,
                                     self.lr: 1e-1 /np.sqrt(i+1),
                                     self.Q_lr: self.cur_Q_lr,
-                                    self.Q.true_reward : ret_batch/trn_ret.max()
+                                    self.Q.true_reward : ret_batch/trn_ret.max(),
+                                    self.Q.reward_enabled : ret_enabled_batch
                                     }))
                 pre_adv += pre_adv_loss
                 post_adv += loss
